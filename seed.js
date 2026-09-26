@@ -9,7 +9,7 @@
 // Catálogo de la pantalla de la tienda (/tienda).
 // ============================================================
 
-const CATALOG_VERSION = 2;
+const CATALOG_VERSION = 3;
 
 // Diseños del propio Portal para Más que Pastelitos (sep-2026):
 // flyers completos de los combos + recortes crudos de la comida.
@@ -109,7 +109,7 @@ const SEED_CATALOG = {
             combo("emp-3816", 3816, 2400, 50412, "Empacado con 600 pastelitos, 600 croquetas, 600 quipes y 600 minisandwiches", IMG.minisandwich),
             combo("emp-3812", 3812, 2400, 50712, "Empacado con 600 pastelitos, 600 croquetas, 600 quipes y 600 bolitas de yuca", IMG.bolitas),
             combo("emp-3820", 3820, 4000, 84112, "Empacado con 1,000 pastelitos, 1,000 croquetas, 1,000 quipes y 1,000 bolitas de yuca", IMG.bolitas),
-            combo("emp-3826", 3826, 4000, 83612, "Empacado con 1,000 pastelitos, 1,000 croquetas, 1,000 bolitas de yuca y 1,000 minisandwiches", IMG.flyer3826)
+            combo("emp-3826", 3826, 5000, 83612, "Empacado con 1,000 pastelitos, 1,000 croquetas, 1,000 quipes, 1,000 bolitas de yuca y 1,000 minisandwiches", IMG.flyer3826)
           ]
         }
       ]
