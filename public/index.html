@@ -156,7 +156,14 @@
       <div class="ic">💵</div><div><div class="t">Efectivo</div><div class="s">Pagas al recibir tu pedido</div></div>
     </div>
     <div class="pay-card" id="pc-transfer" onclick="setPay('transfer')">
-      <div class="ic">📱</div><div><div class="t">Transferencia</div><div class="s">Te enviamos los datos al confirmar</div></div>
+      <div class="ic">📱</div><div><div class="t">Transferencia</div><div class="s">Paga con el QR antes de confirmar</div></div>
+    </div>
+    <div id="pay-qr" style="display:none; text-align:center; margin-top:14px; background:#fff; border:2px dashed #25D366; border-radius:14px; padding:16px;">
+      <div style="font-weight:800; font-size:17px; margin-bottom:8px">📷 Escanea y paga ahora</div>
+      <img id="pay-qr-img" src="" alt="QR para transferencia" style="max-width:220px; border-radius:10px;">
+      <div style="font-size:13px; color:#6b6b6b; margin:8px 0 12px">Apunta tu app del banco al código.<br>Después presiona continuar. 👇</div>
+      <button class="btn btn-p" style="width:100%" onclick="go(5)">Ya pagué, continuar →</button>
+      <button class="back" style="margin-top:8px" onclick="setPay('cash')">← Prefiero efectivo</button>
     </div>
   </section>
 
@@ -183,6 +190,11 @@
         • <span id="ok-next">Pagas al recibir.</span><br>
         • Guarda tu número de pedido: <b id="ok-num2">#000</b>
       </div>
+      <div id="qr-pago" style="display:none; text-align:center; margin-top:14px; background:#fff; border:2px dashed #25D366; border-radius:14px; padding:16px;">
+        <div style="font-weight:800; font-size:17px; margin-bottom:8px">📷 Escanea para pagar</div>
+        <img id="qr-pago-img" src="" alt="QR para transferencia" style="max-width:220px; border-radius:10px;">
+        <div style="font-size:13px; color:#6b6b6b; margin-top:8px">Apunta tu app del banco al código.<br>Envíanos el comprobante por WhatsApp. 🙏</div>
+      </div>
       <button class="btn btn-p" style="width:100%; margin-top:16px" onclick="location.reload()">Hacer otro pedido</button>
     </div>
   </section>
@@ -200,6 +212,7 @@
 
 <script>
 let catalog = null;
+let PAGO_QR = null; // QR del banco para transferencias (lo configura el dueño en /tienda)
 let step = 1;
 let orderType = null, payMethod = null;
 let cart = {};           // itemId -> {qty, note}
@@ -212,6 +225,7 @@ async function load() {
   const r = await fetch("/api/catalog");
   catalog = await r.json();
   renderDepts();
+  try { PAGO_QR = (await (await fetch("/api/settings")).json()).pago_qr || null; } catch (e) {}
 }
 function go(n) {
   step = n;
@@ -232,6 +246,13 @@ function setPay(p) {
   payMethod = p;
   $("pc-cash").classList.toggle("sel", p === "cash");
   $("pc-transfer").classList.toggle("sel", p === "transfer");
+  // Transferencia con QR: el cliente paga ANTES de confirmar el pedido.
+  if (p === "transfer" && PAGO_QR) {
+    $("pay-qr-img").src = PAGO_QR;
+    $("pay-qr").style.display = "block";
+    return;
+  }
+  $("pay-qr").style.display = "none";
   setTimeout(() => go(5), 220);
 }
 
@@ -387,9 +408,14 @@ async function submitOrder() {
     if (!r.ok) throw new Error(order.error || "Error");
     $("ok-num").textContent = order.number;
     $("ok-num2").textContent = order.number;
+    const isTransfer = payMethod === "transfer";
     $("ok-next").textContent = orderType === "delivery"
-      ? (payMethod === "cash" ? "Pagas en efectivo al recibir." : "Te llamaremos con los datos de la transferencia.")
-      : (payMethod === "cash" ? "Pagas en efectivo al recoger." : "Te llamaremos con los datos de la transferencia.");
+      ? (isTransfer ? "Tu pedido está en espera de pago — envíanos el comprobante por WhatsApp 🙏" : "Pagas en efectivo al recibir.")
+      : (isTransfer ? "Tu pedido está en espera de pago — envíanos el comprobante por WhatsApp 🙏" : "Pagas en efectivo al recoger.");
+    // QR de respaldo por si no pagó en el paso anterior
+    const showQR = isTransfer && PAGO_QR;
+    $("qr-pago").style.display = showQR ? "block" : "none";
+    if (showQR) $("qr-pago-img").src = PAGO_QR;
     $("ok-sum").innerHTML = order.items.map(l =>
       `<div class="ln"><span><span class="q">${l.qty} ×</span> ${esc(l.name)}</span><span>${fmt(l.subtotal)}</span></div>`).join("") +
       `<div class="tot"><span>Total</span><span>${fmt(order.items.reduce((s, l) => s + l.subtotal, 0))}</span></div>`;

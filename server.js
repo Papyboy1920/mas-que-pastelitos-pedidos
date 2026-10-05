@@ -92,8 +92,32 @@ app.put("/api/catalog", requireStore, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------------- API: ajustes públicos de la tienda ----------------
+// Público: la app de clientes necesita el QR de pago para mostrarlo al confirmar.
+// Solo se exponen claves explúcitamente públicas (nada sensible).
+const PUBLIC_SETTINGS = ["pago_qr"];
+app.get("/api/settings", async (req, res) => {
+  const out = {};
+  for (const k of PUBLIC_SETTINGS) out[k] = await db.kvGet(k);
+  res.json(out);
+});
+
+// Protegido: el dueño configura el QR de transferencia una vez en /tienda.
+app.put("/api/settings", requireStore, express.json({ limit: "3mb" }), async (req, res) => {
+  const qr = req.body && req.body.pago_qr;
+  if (qr === null || qr === "") {
+    await db.kvDel("pago_qr");
+    return res.json({ ok: true });
+  }
+  if (!(typeof qr === "string" && qr.startsWith("data:image/"))) {
+    return res.status(400).json({ error: "QR inválido." });
+  }
+  await db.kvSet("pago_qr", qr);
+  res.json({ ok: true });
+});
+
 // ---------------- API: pedidos ----------------
-const VALID_STATUS = ["nuevo", "preparando", "listo", "entregado", "cancelado"];
+const VALID_STATUS = ["pendiente_pago", "nuevo", "preparando", "listo", "entregado", "cancelado"];
 
 function findItem(catalog, itemId) {
   for (const d of catalog.departments || []) {
@@ -162,7 +186,9 @@ app.post("/api/orders", async (req, res) => {
       address: String(customer.address || "").trim().slice(0, 200)
     },
     payment,
-    notes: String(notes || "").slice(0, 500)
+    notes: String(notes || "").slice(0, 500),
+    // Transferencia: la cocina NO arranca hasta que el dueño confirme "Pago recibido".
+    status: payment === "transfer" ? "pendiente_pago" : "nuevo"
   });
   order.total = total;
 

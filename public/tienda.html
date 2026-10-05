@@ -18,6 +18,10 @@
   main { max-width:720px; margin:0 auto; padding:12px 12px 60px; }
   .tab { display:none; } .tab.on { display:block; }
   .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px; }
+  .btn-file { display:inline-block; background:#2980b9; color:#fff; font-weight:700; font-size:14px; border-radius:10px; padding:12px 16px; cursor:pointer; }
+  .card .b-done, .card .b-cancel { border:none; border-radius:10px; padding:12px 16px; font-size:14px; font-weight:700; cursor:pointer; color:#fff; }
+  .card .b-done:disabled { opacity:.4; cursor:default; }
+  #qr-preview img { max-width:220px; border-radius:12px; border:2px solid #25D366; }
   .card.nuevo { border-left:6px solid #e67e22; } .card.preparando { border-left:6px solid #2980b9; }
   .card.listo { border-left:6px solid #8e44ad; } .card.entregado { border-left:6px solid var(--green); opacity:.75; }
   .card.cancelado { border-left:6px solid var(--red); opacity:.6; }
@@ -26,6 +30,8 @@
   .badge { font-size:12px; font-weight:700; padding:5px 12px; border-radius:999px; color:#fff; text-transform:uppercase; }
   .b-nuevo { background:#e67e22; } .b-preparando { background:#2980b9; } .b-listo { background:#8e44ad; }
   .b-entregado { background:var(--green); } .b-cancelado { background:var(--red); }
+  .b-pendiente_pago { background:#b8860b; }
+  .card.pendiente_pago { border-left:6px solid #b8860b; }
   .o-meta { font-size:13px; color:var(--mut); margin-top:4px; }
   .o-items { margin:10px 0; font-size:14px; }
   .o-items .ln { padding:4px 0; border-bottom:1px dashed var(--line); }
@@ -90,6 +96,7 @@
   <button id="tab-o" class="on" onclick="showTab('o')">📦 Pedidos <span id="cnt"></span></button>
   <button id="tab-c" onclick="showTab('c')">📝 Catálogo</button>
   <button id="tab-h" onclick="showTab('h')">📊 Historial</button>
+  <button id="tab-p" onclick="showTab('p')">💳 Pagos</button>
 </nav>
 <main>
   <section class="tab on" id="t-o"><div id="orders"></div></section>
@@ -111,12 +118,24 @@
     <div class="h-summary" id="h-summary"></div>
     <div id="history"></div>
   </section>
+  <section class="tab" id="t-p">
+    <div class="hint">Sube <b>una sola vez</b> el QR de tu banco para recibir transferencias. Los clientes que elijan <b>Transferencia</b> lo verán al confirmar su pedido con un botón <b>"Escanea para pagar"</b> — sin llamadas de ida y vuelta por el número de cuenta.</div>
+    <div class="card" style="max-width:420px">
+      <div id="qr-preview" style="text-align:center; margin-bottom:12px; color:#888">Sin QR configurado</div>
+      <label class="btn-file">📤 Subir QR del banco<input type="file" id="qr-file" accept="image/*" hidden></label>
+      <div style="display:flex; gap:8px; margin-top:10px">
+        <button class="b-done" id="qr-save" onclick="saveQR()" disabled>💾 Guardar QR</button>
+        <button class="b-cancel" id="qr-clear" onclick="clearQR()">🗑 Quitar</button>
+      </div>
+      <div id="qr-msg" style="font-size:13px; margin-top:8px"></div>
+    </div>
+  </section>
 </main>
 
 <script>
 const $ = id => document.getElementById(id);
 const fmt = n => "RD$" + Number(n).toLocaleString("es-DO", {minimumFractionDigits: 0, maximumFractionDigits: 2});
-const STATUS_ES = { nuevo:"Nuevo", preparando:"Preparando", listo:"Listo", entregado:"Entregado", cancelado:"Cancelado" };
+const STATUS_ES = { pendiente_pago:"💰 Por cobrar", nuevo:"Nuevo", preparando:"Preparando", listo:"Listo", entregado:"Entregado", cancelado:"Cancelado" };
 const TYPE_ES = { delivery:"🛵 Delivery", pickup:"🏪 Recoger" };
 const PAY_ES = { cash:"💵 Efectivo", transfer:"🏦 Transferencia" };
 let orders = [];
@@ -137,7 +156,62 @@ function showTab(t) {
   $("tab-c").classList.toggle("on", t === "c");
   $("t-h").classList.toggle("on", t === "h");
   $("tab-h").classList.toggle("on", t === "h");
+  $("t-p").classList.toggle("on", t === "p");
+  $("tab-p").classList.toggle("on", t === "p");
   if (t === "h" && typeof renderHistory === "function") renderHistory();
+  if (t === "p") loadQR();
+}
+
+// ---- QR de pago por transferencia ----
+let qrData = null; // dataURL lista para guardar (o null)
+function qrMsg(t, ok) { const m = $("qr-msg"); m.textContent = t; m.style.color = ok ? "#25D366" : "#e74c3c"; }
+async function loadQR() {
+  qrData = null; $("qr-save").disabled = true;
+  try {
+    const r = await fetch("/api/settings");
+    const s = await r.json();
+    renderQRPreview(s.pago_qr || null);
+  } catch (e) { renderQRPreview(null); }
+}
+function renderQRPreview(dataUrl) {
+  const p = $("qr-preview");
+  p.innerHTML = dataUrl ? `<img src="${dataUrl}" alt="QR de pago">` : "Sin QR configurado";
+}
+$("qr-file").addEventListener("change", e => {
+  const f = e.target.files[0]; if (!f) return;
+  const img = new Image();
+  img.onload = () => {
+    const MAX = 800, sc = Math.min(1, MAX / Math.max(img.width, img.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    qrData = c.toDataURL("image/jpeg", 0.85);
+    URL.revokeObjectURL(img.src);
+    renderQRPreview(qrData);
+    $("qr-save").disabled = false;
+    qrMsg("");
+  };
+  img.onerror = () => qrMsg("No se pudo leer la imagen.");
+  img.src = URL.createObjectURL(f);
+});
+async function saveQR() {
+  if (!qrData) return;
+  qrMsg("Guardandoâ¦", true);
+  try {
+    const r = await fetch("/api/settings", { method: "PUT", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ pago_qr: qrData }) });
+    if (r.status === 401) { needKey(); return; }
+    if (!r.ok) throw new Error();
+    qrMsg("✅ QR guardado. Los clientes lo verán al pagar por transferencia.", true);
+    $("qr-save").disabled = true; qrData = null;
+  } catch (e) { qrMsg("Error al guardar. Intenta de nuevo."); }
+}
+async function clearQR() {
+  try {
+    const r = await fetch("/api/settings", { method: "PUT", headers: authHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({ pago_qr: null }) });
+    if (r.status === 401) { needKey(); return; }
+    if (!r.ok) throw new Error();
+    renderQRPreview(null); qrMsg("QR eliminado.", true);
+  } catch (e) { qrMsg("Error al eliminar. Intenta de nuevo."); }
 }
 
 // ---- acceso con clave de tienda ----
@@ -199,10 +273,11 @@ function renderOrders() {
         ${o.notes ? `<br>📝 ${esc(o.notes)}` : ""}
       </div>
       <div class="stbtns">
+        ${o.status === "pendiente_pago" ? `<button class="b-done" onclick="setStatus(${o.id},'nuevo')">💰 Pago recibido</button>` : ""}
         ${o.status === "nuevo" ? `<button class="b-prep" onclick="setStatus(${o.id},'preparando')">👨‍🍳 Preparando</button>` : ""}
         ${o.status === "preparando" ? `<button class="b-ready" onclick="setStatus(${o.id},'listo')">🔔 Listo</button>` : ""}
         ${o.status === "listo" ? `<button class="b-done" onclick="setStatus(${o.id},'entregado')">✅ Entregado</button>` : ""}
-        ${(o.status === "nuevo" || o.status === "preparando") ? `<button class="b-cancel" onclick="cancelOrder(${o.id})">✖ Cancelar</button>` : ""}
+        ${(o.status === "pendiente_pago" || o.status === "nuevo" || o.status === "preparando") ? `<button class="b-cancel" onclick="cancelOrder(${o.id})">✖ Cancelar</button>` : ""}
       </div>
     </div>`).join("");
 }

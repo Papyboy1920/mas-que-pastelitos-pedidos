@@ -168,6 +168,13 @@ async function kvSet(key, value) {
     "INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
   ).run(key, value);
 }
+async function kvDel(key) {
+  if (kind === "pg") {
+    await pool.query("DELETE FROM kv WHERE key = $1", [key]);
+    return;
+  }
+  sdb.prepare("DELETE FROM kv WHERE key = ?").run(key);
+}
 
 // ---------- catálogo ----------
 async function getCatalog() {
@@ -209,18 +216,19 @@ async function nextOrderNumber() {
   return "#" + String(seq).padStart(3, "0");
 }
 
-async function createOrder({ number, type, items, customer, payment, notes }) {
+async function createOrder({ number, type, items, customer, payment, notes, status }) {
+  const st = status || "nuevo";
   if (kind === "pg") {
     const r = await pool.query(
       `INSERT INTO orders (number, type, items, customer, payment, notes, status)
-       VALUES ($1,$2,$3,$4,$5,$6,'nuevo') RETURNING *`,
-      [number, type, JSON.stringify(items), JSON.stringify(customer), payment, notes || null]
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [number, type, JSON.stringify(items), JSON.stringify(customer), payment, notes || null, st]
     );
     return mapOrder(r.rows[0]);
   }
   const info = sdb.prepare(
-    "INSERT INTO orders (number, type, items, customer, payment, notes, status) VALUES (?, ?, ?, ?, ?, ?, 'nuevo')"
-  ).run(number, type, JSON.stringify(items), JSON.stringify(customer), payment, notes || null);
+    "INSERT INTO orders (number, type, items, customer, payment, notes, status) VALUES (?, ?, ?, ?, ?, ?, ?)"
+  ).run(number, type, JSON.stringify(items), JSON.stringify(customer), payment, notes || null, st);
   const row = sdb.prepare("SELECT * FROM orders WHERE id = ?").get(info.lastInsertRowid);
   return mapOrder(row);
 }
@@ -267,6 +275,7 @@ module.exports = {
   dbKind,
   kvGet,
   kvSet,
+  kvDel,
   getCatalog,
   setCatalog,
   nextOrderNumber,
