@@ -32,6 +32,7 @@
   .o-items .ln small { color:var(--mut); }
   .o-cust { font-size:14px; background:#2a2119; border-radius:10px; padding:10px; margin-bottom:10px; }
   .o-cust a { color:var(--green-d); font-weight:700; text-decoration:none; font-size:16px; }
+  .wa-btn { display:inline-block; background:#25D366; color:#fff !important; font-weight:700; font-size:13px; border-radius:999px; padding:6px 12px; margin-left:8px; text-decoration:none; }
   .o-total { font-size:18px; font-weight:800; color:var(--green-d); text-align:right; margin:6px 0 10px; }
   .stbtns { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
   .stbtns button { border:none; border-radius:10px; padding:14px 8px; font-size:15px; font-weight:700; cursor:pointer; color:#fff; }
@@ -173,6 +174,7 @@ async function loadOrders() {
   renderOrders();
 }
 function esc(s) { return String(s == null ? "" : s).replace(/</g, "&lt;"); }
+function waLink(phone) { let d = String(phone || "").replace(/\D/g, ""); if (d.length === 10) d = "1" + d; return "https://wa.me/" + d; }
 function renderOrders() {
   const box = $("orders");
   const vis = orders.filter(o => o.status !== "cancelado");
@@ -192,7 +194,7 @@ function renderOrders() {
       <div class="o-total">Total: ${fmt(o.items.reduce((s, l) => s + l.subtotal, 0))}</div>
       <div class="o-cust">
         👤 <b>${esc(o.customer.name)}</b><br>
-        📞 <a href="tel:${esc(o.customer.phone)}">${esc(o.customer.phone)}</a> <small>(toca para llamar)</small>
+        📞 <a href="tel:${esc(o.customer.phone)}">${esc(o.customer.phone)}</a> <small>(toca para llamar)</small> <a class="wa-btn" href="${waLink(o.customer.phone)}" target="_blank">💬 WhatsApp</a>
         ${o.customer.address ? `<br>📍 ${esc(o.customer.address)}` : ""}
         ${o.notes ? `<br>📝 ${esc(o.notes)}` : ""}
       </div>
@@ -351,7 +353,7 @@ function renderHistory() {
       </div>
       <div class="o-meta">🕒 ${esc(o.created_at)}</div>
       <div class="o-items">${o.items.map(l => `<div class="ln">🧾 <b>${l.qty} ×</b> ${esc(l.name)}</div>`).join("")}</div>
-      <div class="o-cust">👤 <b>${esc(o.customer.name)}</b> · 📞 <a href="tel:${esc(o.customer.phone)}">${esc(o.customer.phone)}</a></div>
+      <div class="o-cust">👤 <b>${esc(o.customer.name)}</b> · 📞 <a href="tel:${esc(o.customer.phone)}">${esc(o.customer.phone)}</a> <a class="wa-btn" href="${waLink(o.customer.phone)}" target="_blank">💬</a></div>
       <div class="o-total">${H_TOTAL}: ${fmt(hOrderTotal(o))}</div>
     </div>`).join("");
 }
